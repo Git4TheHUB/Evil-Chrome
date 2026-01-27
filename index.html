@@ -1,342 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>3D Arena – 2D Fighters (Safe Loader)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<meta charset="UTF-8" />
+<title>Roblox-Like Three.js Game</title>
 <style>
-body {
-  margin: 0;
-  overflow: hidden;
-  background: #000;
-  font-family: Arial, sans-serif;
-}
-
-#ui {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  color: white;
-  z-index: 10;
-}
-
-.bar {
-  width: 200px;
-  height: 16px;
-  background: #333;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 10px;
-}
-
-.fill {
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, #44ff44, #88ff88);
-  transition: width 0.3s;
-}
+  body {
+    margin: 0;
+    overflow: hidden;
+  }
 </style>
 </head>
-
 <body>
-<div id="ui">
-  <div>Player 1</div>
-  <div class="bar"><div id="hp1" class="fill"></div></div>
-  <div>Author AI</div>
-  <div class="bar"><div id="hp2" class="fill"></div></div>
-</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
-<script>
-/* ======================
-   CONFIG (EDIT PATHS)
-====================== */
-const PLAYER_CONFIG = [
-  {
-    name: "Player 1",
-    isAI: false,
-    textures: {
-      idle: "./assets/player1/idle.png",
-      move: "./assets/player1/move.png",
-      attack: "./assets/player1/attack.png"
-    },
-    voice: "./assets/player1/attack.mp3",
-    start: { x: -5, z: -5 }
-  },
-  {
-    name: "Author AI",
-    isAI: true,
-    textures: {
-      idle: "./assets/player2/idle.png",
-      move: "./assets/player2/move.png",
-      attack: "./assets/player2/attack.png"
-    },
-    voice: "./assets/player2/attack.mp3",
-    start: { x: 5, z: 5 }
+//////////////////////////////////////////////////
+// SCENE SETUP
+//////////////////////////////////////////////////
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+//////////////////////////////////////////////////
+// LIGHTING
+//////////////////////////////////////////////////
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.position.set(10, 20, 10);
+scene.add(sun);
+
+//////////////////////////////////////////////////
+// TEXTURE LOADER
+//////////////////////////////////////////////////
+const textureLoader = new THREE.TextureLoader();
+
+function loadTexture(path) {
+  const texture = textureLoader.load(path);
+  texture.magFilter = THREE.NearestFilter; // blocky Roblox look
+  texture.minFilter = THREE.NearestFilter;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+//////////////////////////////////////////////////
+// ROBLOX-STYLE PART
+//////////////////////////////////////////////////
+function createPart({
+  size = { x: 1, y: 1, z: 1 },
+  position = { x: 0, y: 0, z: 0 },
+  texture = null,
+  color = 0xffffff
+}) {
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+
+  const material = texture
+    ? new THREE.MeshStandardMaterial({ map: loadTexture(texture) })
+    : new THREE.MeshStandardMaterial({ color });
+
+  const part = new THREE.Mesh(geometry, material);
+  part.position.set(position.x, position.y, position.z);
+  part.castShadow = true;
+  part.receiveShadow = true;
+
+  scene.add(part);
+  return part;
+}
+
+//////////////////////////////////////////////////
+// WORLD GENERATION
+//////////////////////////////////////////////////
+for (let x = -10; x <= 10; x++) {
+  for (let z = -10; z <= 10; z++) {
+    createPart({
+      position: { x, y: 0, z },
+      texture: "./textures/grass.png"
+    });
   }
-];
+}
 
-const ARENA_SIZE = 20;
-const PLAYER_SPEED = 0.12;
-const ATTACK_RANGE = 2.5;
-const ATTACK_DAMAGE = 20;
-const ATTACK_COOLDOWN = 900;
+createPart({
+  size: { x: 2, y: 2, z: 2 },
+  position: { x: 3, y: 1, z: 3 },
+  texture: "./textures/wood.png"
+});
 
-/* ======================
-   THREE SETUP
-====================== */
-let scene, camera, renderer;
-let players = [];
+createPart({
+  position: { x: -3, y: 1, z: -3 },
+  texture: "./textures/stone.png"
+});
+
+//////////////////////////////////////////////////
+// PLAYER CONTROLS
+//////////////////////////////////////////////////
+camera.position.set(0, 5, 10);
+
 const keys = {};
+const speed = 0.15;
 
-init();
-animate();
+window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-function init() {
-  scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x000000, 8, 40);
+function updatePlayer() {
+  if (keys.w) camera.position.z -= speed;
+  if (keys.s) camera.position.z += speed;
+  if (keys.a) camera.position.x -= speed;
+  if (keys.d) camera.position.x += speed;
 
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 12, 14);
-  camera.lookAt(0, 0, 0);
+  camera.lookAt(
+    camera.position.x,
+    0,
+    camera.position.z - 5
+  );
+}
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+//////////////////////////////////////////////////
+// RESIZE
+//////////////////////////////////////////////////
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+});
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-
-  const light = new THREE.DirectionalLight(0xffffff, 0.8);
-  light.position.set(10, 15, 5);
-  scene.add(light);
-
-  createArena();
-  createPlayers();
-  setupInput();
-}
-
-/* ======================
-   ARENA
-====================== */
-function createArena() {
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE),
-    new THREE.MeshStandardMaterial({ color: 0x2d4a2d })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
-}
-
-/* ======================
-   SAFE LOADERS
-====================== */
-const texLoader = new THREE.TextureLoader();
-const audioListener = new THREE.AudioListener();
-camera.add(audioListener);
-
-window.addEventListener("click", () => {
-  audioListener.context.resume();
-}, { once: true });
-
-function makeFallbackTexture(color = "magenta") {
-  const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 128;
-  const ctx = c.getContext("2d");
-  ctx.clearRect(0,0,64,128);
-  ctx.fillStyle = color;
-  ctx.fillRect(0,0,64,128);
-  return new THREE.CanvasTexture(c);
-}
-
-function loadTextureSafe(path, fallback) {
-  return new Promise(resolve => {
-    texLoader.load(
-      path,
-      tex => {
-        tex.transparent = true;
-        tex.premultiplyAlpha = true;
-        resolve(tex);
-      },
-      undefined,
-      () => resolve(fallback)
-    );
-  });
-}
-
-function loadAudioSafe(path) {
-  return new Promise(resolve => {
-    const audio = new THREE.Audio(audioListener);
-    new THREE.AudioLoader().load(
-      path,
-      buffer => {
-        audio.setBuffer(buffer);
-        audio.setVolume(0.6);
-        resolve(audio);
-      },
-      undefined,
-      () => resolve(audio)
-    );
-  });
-}
-
-/* ======================
-   PLAYERS
-====================== */
-async function createPlayers() {
-  for (const cfg of PLAYER_CONFIG) {
-
-    const fallback = makeFallbackTexture(cfg.isAI ? "blue" : "red");
-
-    const textures = {
-      idle: await loadTextureSafe(cfg.textures.idle, fallback),
-      move: await loadTextureSafe(cfg.textures.move, fallback),
-      attack: await loadTextureSafe(cfg.textures.attack, fallback)
-    };
-
-    const material = new THREE.SpriteMaterial({
-      map: textures.idle,
-      transparent: true,
-      depthWrite: false
-    });
-
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(2, 3, 1);
-    sprite.position.set(cfg.start.x, 1.5, cfg.start.z);
-    scene.add(sprite);
-
-    const sound = await loadAudioSafe(cfg.voice);
-
-    players.push({
-      sprite,
-      textures,
-      sound,
-      health: 100,
-      lastAttack: 0,
-      attacking: false,
-      isAI: cfg.isAI,
-      velocity: new THREE.Vector3()
-    });
-  }
-}
-
-/* ======================
-   INPUT
-====================== */
-function setupInput() {
-  window.addEventListener("keydown", e => keys[e.code] = true);
-  window.addEventListener("keyup", e => keys[e.code] = false);
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-}
-
-/* ======================
-   GAME LOGIC
-====================== */
-function setTexture(p, type) {
-  p.sprite.material.map = p.textures[type];
-  p.sprite.material.needsUpdate = true;
-}
-
-function attack(i) {
-  const a = players[i];
-  const d = players[1 - i];
-  const now = Date.now();
-
-  if (now - a.lastAttack < ATTACK_COOLDOWN) return;
-
-  a.lastAttack = now;
-  a.attacking = true;
-  setTexture(a, "attack");
-
-  if (a.sound && a.sound.buffer) {
-    if (a.sound.isPlaying) a.sound.stop();
-    a.sound.play();
-  }
-
-  if (a.sprite.position.distanceTo(d.sprite.position) <= ATTACK_RANGE) {
-    d.health = Math.max(0, d.health - ATTACK_DAMAGE);
-    updateHP();
-  }
-
-  setTimeout(() => {
-    a.attacking = false;
-    setTexture(a, "idle");
-  }, 300);
-}
-
-function updateHP() {
-  document.getElementById("hp1").style.width = players[0].health + "%";
-  document.getElementById("hp2").style.width = players[1].health + "%";
-}
-
-function updatePlayer(i) {
-  const p = players[i];
-  p.velocity.set(0, 0, 0);
-
-  if (!p.isAI) {
-    if (keys["KeyW"]) p.velocity.z -= PLAYER_SPEED;
-    if (keys["KeyS"]) p.velocity.z += PLAYER_SPEED;
-    if (keys["KeyA"]) p.velocity.x -= PLAYER_SPEED;
-    if (keys["KeyD"]) p.velocity.x += PLAYER_SPEED;
-    if (keys["Space"]) attack(i);
-  }
-
-  if (p.velocity.length() > 0) {
-    p.sprite.position.add(p.velocity);
-    if (!p.attacking) setTexture(p, "move");
-  } else if (!p.attacking) {
-    setTexture(p, "idle");
-  }
-
-  p.sprite.lookAt(camera.position);
-}
-
-/* ======================
-   AI
-====================== */
-function updateAI(i) {
-  const ai = players[i];
-  const target = players[0];
-
-  const dir = new THREE.Vector3().subVectors(
-    target.sprite.position,
-    ai.sprite.position
-  );
-
-  const dist = dir.length();
-  dir.normalize();
-
-  if (dist > 2.3) {
-    ai.sprite.position.add(dir.multiplyScalar(PLAYER_SPEED * 0.8));
-    if (!ai.attacking) setTexture(ai, "move");
-  } else {
-    attack(i);
-  }
-
-  ai.sprite.lookAt(camera.position);
-}
-
-/* ======================
-   LOOP
-====================== */
+//////////////////////////////////////////////////
+// GAME LOOP
+//////////////////////////////////////////////////
 function animate() {
   requestAnimationFrame(animate);
-
-  if (players.length === 2) {
-    players.forEach((p, i) => {
-      if (p.isAI) updateAI(i);
-      updatePlayer(i);
-    });
-  }
-
+  updatePlayer();
   renderer.render(scene, camera);
 }
+animate();
+
 </script>
+
 </body>
 </html>
