@@ -2,37 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Roblox-Style Three.js Game</title>
-
+<title>Three.js OBJ Player + GLTF Map</title>
 <style>
-  body { margin: 0; overflow: hidden; font-family: sans-serif; }
-
-  /* CHAT UI */
-  #chat {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    width: 300px;
-    background: rgba(0,0,0,0.4);
-    color: white;
-    padding: 8px;
-    border-radius: 6px;
-    font-size: 14px;
-  }
-
-  #messages {
-    max-height: 150px;
-    overflow-y: auto;
-    margin-bottom: 6px;
-  }
-
-  #chat input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 4px;
-    border: none;
-    outline: none;
-  }
+  body { margin:0; overflow:hidden; font-family:sans-serif; }
+  #chat { position:absolute; bottom:10px; left:10px; width:300px; background:rgba(0,0,0,0.4); color:white; padding:8px; border-radius:6px; font-size:14px; }
+  #messages { max-height:150px; overflow-y:auto; margin-bottom:6px; }
+  #chat input { width:100%; box-sizing:border-box; padding:4px; border:none; outline:none; }
 </style>
 </head>
 <body>
@@ -44,247 +19,162 @@
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js";
 
-////////////////////////////
-// SCENE
-////////////////////////////
+//////////////////////////
+// SCENE & CAMERA
+//////////////////////////
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias:true });
+camera.position.set(0,5,10);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const sun = new THREE.DirectionalLight(0xffffff, 1);
+scene.add(new THREE.AmbientLight(0xffffff,0.5));
+const sun = new THREE.DirectionalLight(0xffffff,1);
 sun.position.set(10,20,10);
 scene.add(sun);
 
-////////////////////////////
-// FLOOR (MODEL OR DEFAULT)
-////////////////////////////
-let floor;
+//////////////////////////
+// LOAD MAP (GLTF)
+//////////////////////////
+const gltfLoader = new GLTFLoader();
+let map;
+gltfLoader.load('./models/map.gltf', (gltf)=>{
+    map = gltf.scene;
+    scene.add(map);
+});
 
-function loadFloorModel(path) {
-  const loader = new THREE.ObjectLoader();
-  loader.load(path, obj => {
-    if (floor) scene.remove(floor);
-    floor = obj;
-    scene.add(floor);
-  });
-}
+//////////////////////////
+// LOAD PLAYER (OBJ)
+//////////////////////////
+const objLoader = new OBJLoader();
+let player = new THREE.Group();
+let playerScale = 1; // Change this to resize player
 
-// COMMENT OUT ONE OF THESE:
+objLoader.load('Character Roblox.obj', (obj)=>{
+    player = obj;
+    player.scale.set(playerScale, playerScale, playerScale);
+    scene.add(player);
+    player.position.set(0,0,5);
+});
 
-// Default block floor
-floor = new THREE.Mesh(
-  new THREE.BoxGeometry(60,1,60),
-  new THREE.MeshStandardMaterial({ color: 0x55aa55 })
-);
-floor.position.y = -0.5;
-scene.add(floor);
-
-// OR JSON MODEL FLOOR
-// loadFloorModel("./models/floor.json");
-
-////////////////////////////
-// PLAYER (NOOB)
-////////////////////////////
-const player = new THREE.Group();
-scene.add(player);
-
-const YELLOW = 0xfff200;
-const BLUE = 0x0055ff;
-const GREEN = 0x00aa00;
-
-function box(w,h,d,c){
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(w,h,d),
-    new THREE.MeshStandardMaterial({ color:c })
-  );
-}
-
-const torso = box(1.5,2,1,BLUE);
-torso.position.y = 2;
-
-const head = box(1.2,1.2,1.2,YELLOW);
-head.position.y = 3.6;
-
-const leftArm = box(0.6,1.6,0.6,YELLOW);
-const rightArm = box(0.6,1.6,0.6,YELLOW);
-leftArm.position.set(-1.2,2,0);
-rightArm.position.set(1.2,2,0);
-
-const leftLeg = box(0.6,1.6,0.6,GREEN);
-const rightLeg = box(0.6,1.6,0.6,GREEN);
-leftLeg.position.set(-0.4,0.8,0);
-rightLeg.position.set(0.4,0.8,0);
-
-player.add(torso, head, leftArm, rightArm, leftLeg, rightLeg);
-player.position.set(0,0,5);
-
-////////////////////////////
-// SWORD TOOL
-////////////////////////////
-const sword = new THREE.Group();
-
-const blade = box(0.2,2,0.2,0xdddddd);
-blade.position.y = 1;
-
-const handle = box(0.3,0.6,0.3,0x553311);
-handle.position.y = 0.3;
-
-sword.add(blade, handle);
-sword.position.set(0,-0.8,0.4);
-sword.rotation.x = Math.PI/2;
-rightArm.add(sword);
-
-let swordEquipped = true;
-let swordSwing = 0;
-
-////////////////////////////
+//////////////////////////
 // INPUT
-////////////////////////////
+//////////////////////////
 const keys = {};
-addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+window.addEventListener('keydown', e=> keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e=> keys[e.key.toLowerCase()] = false);
 
-addEventListener("mousedown", e => {
-  if (e.button === 0 && swordEquipped) {
-    swordSwing = 1;
-  }
-});
-
-////////////////////////////
-// CAMERA MOUSE
-////////////////////////////
-let yaw = 0, pitch = 0;
-
-addEventListener("click", () => document.body.requestPointerLock());
-addEventListener("mousemove", e => {
-  if (document.pointerLockElement !== document.body) return;
-  yaw -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch = Math.max(-0.4, Math.min(0.4, pitch));
-});
-
-////////////////////////////
+//////////////////////////
 // PHYSICS
-////////////////////////////
+//////////////////////////
 const velocity = new THREE.Vector3();
 const gravity = -0.035;
 const speed = 0.12;
 const jumpPower = 0.75;
 let onGround = false;
 let targetRot = 0;
-let walkTime = 0;
 
-////////////////////////////
-// CHAT SYSTEM
-////////////////////////////
-const messages = document.getElementById("messages");
-const chatInput = document.getElementById("chatInput");
+//////////////////////////
+// CAMERA CONTROL
+//////////////////////////
+let yaw = 0, pitch = 0;
+window.addEventListener('click', ()=>document.body.requestPointerLock());
+window.addEventListener('mousemove', e=>{
+  if(document.pointerLockElement !== document.body) return;
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-0.4, Math.min(0.4, pitch));
+});
 
-chatInput.addEventListener("keydown", e => {
-  if (e.key === "Enter" && chatInput.value.trim()) {
-    const msg = document.createElement("div");
+//////////////////////////
+// CHAT
+//////////////////////////
+const messages = document.getElementById('messages');
+const chatInput = document.getElementById('chatInput');
+
+chatInput.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && chatInput.value.trim()){
+    const msg = document.createElement('div');
     msg.textContent = "You: " + chatInput.value;
     messages.appendChild(msg);
     messages.scrollTop = messages.scrollHeight;
-    chatInput.value = "";
+    chatInput.value = '';
   }
 });
 
-////////////////////////////
-// UPDATE
-////////////////////////////
+//////////////////////////
+// UPDATE LOOP
+//////////////////////////
 function updatePlayer(){
-  let dir = new THREE.Vector3();
-  let moving = false;
+    if(!player) return;
 
-  if (keys.w || keys.arrowup) { dir.z -= 1; moving = true; }
-  if (keys.s || keys.arrowdown) { dir.z += 1; moving = true; }
-  if (keys.a || keys.arrowleft) { dir.x -= 1; moving = true; }
-  if (keys.d || keys.arrowright) { dir.x += 1; moving = true; }
+    let moving = false;
+    let dir = new THREE.Vector3();
 
-  if (moving) {
-    dir.normalize();
-    targetRot = Math.atan2(dir.x, dir.z);
-    player.position.x += Math.sin(targetRot) * speed;
-    player.position.z += Math.cos(targetRot) * speed;
-  }
+    if(keys.w || keys.arrowup){ dir.z -= 1; moving=true; }
+    if(keys.s || keys.arrowdown){ dir.z +=1; moving=true; }
+    if(keys.a || keys.arrowleft){ dir.x -=1; moving=true; }
+    if(keys.d || keys.arrowright){ dir.x +=1; moving=true; }
 
-  player.rotation.y += (targetRot - player.rotation.y) * 0.15;
+    if(moving){
+        dir.normalize();
+        targetRot = Math.atan2(dir.x, dir.z);
+        player.position.x += Math.sin(targetRot)*speed;
+        player.position.z += Math.cos(targetRot)*speed;
+    }
 
-  // Jump
-  if (keys[" "] && onGround) {
-    velocity.y = jumpPower;
-    onGround = false;
-  }
+    player.rotation.y += (targetRot - player.rotation.y)*0.15;
 
-  velocity.y += gravity;
-  player.position.y += velocity.y;
+    // Jump
+    if(keys[" "] && onGround){
+        velocity.y = jumpPower;
+        onGround=false;
+    }
 
-  if (player.position.y <= 0) {
-    player.position.y = 0;
-    velocity.y = 0;
-    onGround = true;
-  }
+    velocity.y += gravity;
+    player.position.y += velocity.y;
+    if(player.position.y <=0){
+        player.position.y = 0;
+        velocity.y=0;
+        onGround=true;
+    }
 
-  // Walk animation
-  if (moving && onGround) {
-    walkTime += 0.15;
-    const s = Math.sin(walkTime);
-    leftArm.rotation.x = s;
-    rightArm.rotation.x = -s;
-    leftLeg.rotation.x = -s;
-    rightLeg.rotation.x = s;
-  }
-
-  // Jump pose
-  if (!onGround) {
-    leftArm.rotation.x = rightArm.rotation.x = -1.2;
-    leftLeg.rotation.x = rightLeg.rotation.x = 0.6;
-  }
-
-  // Sword attack animation
-  if (swordSwing > 0) {
-    swordSwing -= 0.15;
-    sword.rotation.z = -Math.sin(swordSwing * Math.PI) * 1.5;
-  } else {
-    sword.rotation.z = 0;
-  }
-
-  // Camera
-  const camOffset = new THREE.Vector3(
-    Math.sin(yaw) * 10,
-    6 + pitch * 5,
-    Math.cos(yaw) * 10
-  );
-  camera.position.copy(player.position).add(camOffset);
-  camera.lookAt(player.position.x, player.position.y + 2, player.position.z);
+    // Camera follow
+    const camOffset = new THREE.Vector3(Math.sin(yaw)*10, 6+pitch*5, Math.cos(yaw)*10);
+    camera.position.copy(player.position).add(camOffset);
+    camera.lookAt(player.position.x, player.position.y+2, player.position.z);
 }
 
-////////////////////////////
-// LOOP
-////////////////////////////
+//////////////////////////
+// RENDER LOOP
+//////////////////////////
 function animate(){
-  requestAnimationFrame(animate);
-  updatePlayer();
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    updatePlayer();
+    renderer.render(scene, camera);
 }
 animate();
 
-addEventListener("resize", ()=>{
+//////////////////////////
+// RESIZE
+//////////////////////////
+window.addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
 </script>
 </body>
 </html>
-
 
 </script>
 
